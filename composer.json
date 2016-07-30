@@ -1,0 +1,25 @@
+{
+    "name": "appzz/curl-client",
+    "description": "Lightweight curl-client without any ugly dependencies and works on php>=5.3.3",
+    "type": "library",
+    "version": "1.0.0",
+    "keywords": [
+        "curl",
+        "curl-client"
+    ],
+    "homepage": "https://www.bitbucket.org/a-pp-zz/curl-client.git",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "CoolSwitcher",
+            "email": "ds@appzz.tech",
+            "role": "lead"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.3"
+    },
+    "autoload": {
+        "psr-4": {"AppZz\\Http\\": "src/"}
+    }
+}
