@@ -257,8 +257,6 @@ class CurlClient {
 				$agent = constant('\AppZz\Http\CurlClient::CURL_CLIENT_'.strtoupper($agent));
 			}
 		}			
-		echo $agent;
-		exit; 
 		$this->set_option ('CURLOPT_USERAGENT', $agent);
 		return $this;
 	}	
