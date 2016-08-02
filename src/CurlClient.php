@@ -3,7 +3,7 @@
  * Simple Curl Client
  */
 namespace AppZz\Http;
-use AppZz\Http\CurlClient;
+use \AppZz\Helpers\Arr;
 
 class CurlClient {
 		
@@ -288,7 +288,18 @@ class CurlClient {
 	 * @param  string $language
 	 * @return CurlClient
 	 */
-	public function accept ($accept = '*/*', $encoding = NULL, $language = NULL) {
+	public function accept ($accept = '*/*', $encoding = NULL, $language = 'ru-RU') {
+		switch ($accept) {
+			case 'html':
+				$accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
+			break;
+			case 'json':
+				$accept = 'application/json, text/plain, */*';
+			break;				
+			default:
+				$accept = '*/*';
+			break;	
+		}
 		if ($accept)
 			$this->add_header('Accept', $accept);
 		if ($encoding)
@@ -363,14 +374,34 @@ class CurlClient {
 		$this->response->info = curl_getinfo($request);
 	    $this->response->cookies = $this->_parse_cookies();
 	    $this->_parse_headers();
-	    if ( isset($this->response->headers) AND isset($this->response->headers['Content-Encoding']) AND $this->response->headers['Content-Encoding'] == 'gzip')
-	    	$this->response->body = gzdecode($this->response->body);
+	    $this->_populate_body();
 		curl_close($request);
 		if (isset($fp)) {
 			fclose($fp);
 		}
-		return isset ($this->response->info['http_code']) ? $this->response->info['http_code'] : FALSE;
+		return Arr::path($this->response, 'info.http_code');
 	}	
+
+	/**
+	 * Download file
+	 * @param  string $path
+	 * @return http-code or false on error
+	 */
+	public function download ($path = '/tmp') {
+		if ( file_exists($path) AND is_dir($path) AND is_writeable($path))
+			$path .= DIRECTORY_SEPARATOR . basename($this->url); 
+		elseif ( file_exists($path) AND !is_writeable($path))
+			return FALSE;
+		elseif ( !is_writeable(dirname($path)))
+			return FALSE;
+		$this->no_headers();			
+		$ret = $this->send();
+		if ($ret === 200) {
+			file_put_contents($path, $this->get_body());
+			return $ret;
+		}
+		return FALSE;
+	}
 
 	/**
 	 * Get response body text
@@ -422,6 +453,20 @@ class CurlClient {
 	public function get_response () {
 		return $this->response;
 	}	
+
+	/**
+	 * Post-process on body
+	 * @return CurlClient
+	 */
+	private function _populate_body () {
+		$encoding     = Arr::path ($this->response, 'headers.Content-Encoding');
+		$content_type = Arr::path ($this->response, 'headers.Content-Type');
+		if ($encoding == 'gzip')
+	    	$this->response->body = $this->_gz_decode($this->response->body);
+	    if (strpos($content_type, 'json'))
+	    	$this->response->body = json_decode($this->response->body, TRUE);
+	    return $this;
+	}
 
 	/**
 	 * Headers parser
@@ -556,6 +601,19 @@ class CurlClient {
 	}
 
 	/**
+	 * Decode gzip string
+	 * @param  string $data
+	 * @return string
+	 */
+	private function _gz_decode ($data) {
+		if ( function_exists('gzdecode')) {
+			return gzdecode ($data);
+		} else {
+			return gzinflate(substr($data,10,-8));
+		}
+	}
+
+	/**
 	 * Make request
 	 * @param  string $url
 	 * @param  string $method  http-method
@@ -571,6 +629,7 @@ class CurlClient {
 				->method($method)
 				->params($params)
 				->file($file)
+				->accept()
 				->add_headers($headers)
 				->set_options($options);
 	}
@@ -640,28 +699,5 @@ class CurlClient {
 	 */
 	public static function delete ($url, $params = array(), $headers = array (), $options = array ()) {
 		return CurlClient::request($url, 'delete', $params, $headers, $options);
-	}
-
-	/**
-	 * Download file
-	 * @param  string $url
-	 * @param  string $path download path
-	 * @param  string $file filename
-	 * @param  array  $headers
-	 * @param  array  $options curl options
-	 * @return http-code
-	 */
-	public static function download ($url, $path = '/tmp', $file = NULL, $headers = array (), $options = array()) {
-		if ( !$file)
-			$file = basename ($url);
-		$file = preg_replace('#[^\w_\-\.]+#iu', '_', $file);
-		$fullpath = $path . DIRECTORY_SEPARATOR . $file;
-		$c = CurlClient::get ($url, array (), $headers, $options);
-		$c->no_headers();
-		$result = $c->send();
-		if ($result === 200) {
-			file_put_contents($fullpath, $c->get_body());
-		}
-		return $result;
 	}				
 }

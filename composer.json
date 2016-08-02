@@ -17,7 +17,8 @@
         }
     ],
     "require": {
-        "php": ">=5.3.3"
+        "php": ">=5.3.3",
+        "appzz/arr": "dev-master"
     },
     "autoload": {
         "psr-4": {"AppZz\\Http\\": "src/"}
