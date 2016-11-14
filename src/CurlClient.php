@@ -606,6 +606,8 @@ class CurlClient {
 	 * @return string
 	 */
 	private function _gz_decode ($data) {
+		if ( !$data)
+			return FALSE;
 		if ( function_exists('gzdecode')) {
 			return gzdecode ($data);
 		} else {
