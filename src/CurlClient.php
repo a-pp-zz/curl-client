@@ -18,7 +18,20 @@ class CurlClient {
 		'CURLOPT_FOLLOWLOCATION' => TRUE,
 		'CURLOPT_RETURNTRANSFER' => TRUE,
 		'CURLOPT_MAXREDIRS'      => 3,
+		//'CURLOPT_ENCODING'		 => 'identity',
 	);
+
+	/**
+	 * Curl version
+	 * @var string
+	 */
+	private $version;
+
+	/**
+	 * proxy ?
+	 * @var boolean
+	 */
+	private $proxy = FALSE;
 
 	/**
 	 * popular clients
@@ -58,6 +71,7 @@ class CurlClient {
 	public function __construct (array $options = array ()) {
 		$options = array_merge ($options, $this->default_options);
 		$this->set_options ($options);
+		$this->version = Arr::get(curl_version(), 'version');
 	}
 
 	/**
@@ -237,6 +251,7 @@ class CurlClient {
 		$this->set_option ('CURLOPT_PROXY', "{$url}:{$port}");
 		if ($username AND $password)
 			$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");
+		$this->proxy = TRUE;
 		return $this;		
 	}
 
@@ -302,8 +317,10 @@ class CurlClient {
 		}
 		if ($accept)
 			$this->add_header('Accept', $accept);
-		if ($encoding)
+		if ($encoding) {				
+			$this->set_option('CURLOPT_ENCODING', $encoding);
 			$this->add_header('Accept-Encoding', $encoding);
+		}
 		if ($language)
 			$this->add_header('Accept-Language', $language);	
 		return $this;					
@@ -372,6 +389,7 @@ class CurlClient {
 		$this->response       = new \stdClass();
 		$this->response->body = curl_exec($request);
 		$this->response->info = curl_getinfo($request);
+		$this->response->info['version'] = $this->version;
 	    $this->response->cookies = $this->_parse_cookies();
 	    $this->_parse_headers();
 	    $this->_populate_body();
@@ -461,8 +479,8 @@ class CurlClient {
 	private function _populate_body () {
 		$encoding     = Arr::path ($this->response, 'headers.Content-Encoding');
 		$content_type = Arr::path ($this->response, 'headers.Content-Type');
-		if ($encoding == 'gzip')
-	    	$this->response->body = $this->_gz_decode($this->response->body);
+		#if ($encoding == 'gzip')
+	    #	$this->response->body = $this->_gz_decode($this->response->body);
 	    if (strpos($content_type, 'json'))
 	    	$this->response->body = json_decode($this->response->body, TRUE);
 	    return $this;
@@ -472,11 +490,12 @@ class CurlClient {
 	 * Headers parser
 	 * @return boolean
 	 */
-	private function _parse_headers () {
+	private function _parse_headers () {	
 	    $headers_size = isset($this->response->info['header_size']) ? $this->response->info['header_size'] : 0;
 	    $headers = array ();
 	    
 	    if ($headers_size > 0) {
+
 	        $lines = array_slice(explode("\r\n", trim(substr($this->response->body, 0, $headers_size))), 1);
 
 	        foreach ( $lines as $line ) {
