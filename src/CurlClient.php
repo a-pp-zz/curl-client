@@ -240,17 +240,31 @@ class CurlClient {
 
 	/**
 	 * Proxy params
-	 * @param  string  $url
-	 * @param  integer $port
-	 * @param  string  $username
-	 * @param  string  $password
+	 * @param  string  $host
+	 * @param  array  $params
 	 * @return CurlClient
 	 */
-	public function proxy ($url = '', $port = 80, $username = '', $password = '') {
+	public function proxy ($host = '', array $params = array ()) {
 		$this->set_option ('CURLOPT_HTTPPROXYTUNNEL', TRUE);
-		$this->set_option ('CURLOPT_PROXY', "{$url}:{$port}");
-		if ($username AND $password)
-			$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");
+		if ( ! empty ($params)) {
+			extract ($params);
+			if (isset($port))
+				$host . ':' . $port;
+			if (isset($username) AND isset($password))
+				$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");			
+			if (isset($auth)) {
+				$auth = strtoupper ($auth);
+				if ( in_array ($auth, array ('BASIC', 'NTLM')))
+					$this->set_option ('CURLOPT_PROXYAUTH', constant('CURLAUTH_'.$auth));
+			}
+			if (isset($type)) {				
+				$type = strtoupper ($type);
+				if ( in_array ($type, array ('HTTP', 'SOCKS4', 'SOCKS5', 'SOCKS4A', 'SOCKS5_HOSTNAME')))
+					$this->set_option ('CURLOPT_PROXYTYPE', constant('CURLPROXY_'.$type));
+			}
+		}
+
+		$this->set_option ('CURLOPT_PROXY', $host);
 		$this->proxy = TRUE;
 		return $this;		
 	}
@@ -263,8 +277,8 @@ class CurlClient {
 	public function agent ($agent = '') {
 		if ($agent=='random') {
 			$agents = $this->_get_user_agents();
-			$key = mt_rand (0, (sizeof($agents)-1));
-			$agent = $agents[$key];			
+			shuffle ($agents);
+			$agent = array_shift($agents);			
 		}
 		else {
 			$rf = new \ReflectionClass("\AppZz\Http\CurlClient");	
