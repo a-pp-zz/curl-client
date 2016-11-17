@@ -18,7 +18,6 @@ class CurlClient {
 		'CURLOPT_FOLLOWLOCATION' => TRUE,
 		'CURLOPT_RETURNTRANSFER' => TRUE,
 		'CURLOPT_MAXREDIRS'      => 3,
-		//'CURLOPT_ENCODING'		 => 'identity',
 	);
 
 	/**
