@@ -340,6 +340,20 @@ class CurlClient {
 	}
 
 	/**
+	 * Set ajax request headers
+	 * @param  string $request json|xml
+	 * @return CurlClient
+	 */
+	public function ajax ($request = 'json') {
+		$headers = array (
+			'X-Request'=>strtoupper($request),
+			'X-Requested-With'=>'XMLHttpRequest'			
+		);
+		$this->add_headers($headers);
+		return $this;
+	}
+
+	/**
 	 * Set payload params
 	 * @param  array  $params
 	 * @return CurlClient
@@ -403,6 +417,7 @@ class CurlClient {
 		$this->response->body = curl_exec($request);
 		$this->response->info = curl_getinfo($request);
 		$this->response->info['version'] = $this->version;
+		$this->response->info['proxied'] = $this->proxy;
 	    $this->response->cookies = $this->_parse_cookies();
 	    $this->_parse_headers();
 	    $this->_populate_body();
