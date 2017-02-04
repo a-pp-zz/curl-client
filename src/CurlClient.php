@@ -1,6 +1,8 @@
 <?php
 /**
  * Simple Curl Client
+ * @package Http
+ * @version	2.0.0
  */
 namespace AppZz\Http;
 use \AppZz\Helpers\Arr;
@@ -18,6 +20,7 @@ class CurlClient {
 		'CURLOPT_FOLLOWLOCATION' => TRUE,
 		'CURLOPT_RETURNTRANSFER' => TRUE,
 		'CURLOPT_MAXREDIRS'      => 3,
+		'CURLOPT_ENCODING'		 => '',
 	);
 
 	/**
@@ -180,7 +183,7 @@ class CurlClient {
 			break;
 			case 'form':
 				$this->add_header('Content-Type', 'application/x-www-form-urlencoded; charset=' . CurlClient::$charset);
-			break;			
+			break;
 			case 'upload':
 				$this->_get_mime_types();
 				$this->add_header('Content-Type', 'multipart/form-data; charset=' . CurlClient::$charset);
@@ -507,10 +510,14 @@ class CurlClient {
 	private function _populate_body () {
 		$encoding     = Arr::path ($this->response, 'headers.Content-Encoding');
 		$content_type = Arr::path ($this->response, 'headers.Content-Type');
-		#if ($encoding == 'gzip')
-	    #	$this->response->body = $this->_gz_decode($this->response->body);
+
 	    if (strpos($content_type, 'json'))
 	    	$this->response->body = json_decode($this->response->body, TRUE);
+	    elseif (strpos($content_type, 'xml')) {
+			$object = simplexml_load_string ($this->response->body, "SimpleXMLElement", LIBXML_NOCDATA);
+			$this->response->body = json_decode(json_encode($object), TRUE);
+			unset ($object);
+	    }
 	    return $this;
 	}
 
@@ -645,21 +652,6 @@ class CurlClient {
 		$agents = file (dirname(__DIR__) . '/assets/Agents.txt');
 		$agents = array_map('rtrim', $agents);
 		return $agents;
-	}
-
-	/**
-	 * Decode gzip string
-	 * @param  string $data
-	 * @return string
-	 */
-	private function _gz_decode ($data) {
-		if ( !$data)
-			return FALSE;
-		if ( function_exists('gzdecode')) {
-			return gzdecode ($data);
-		} else {
-			return gzinflate(substr($data,10,-8));
-		}
 	}
 
 	/**
