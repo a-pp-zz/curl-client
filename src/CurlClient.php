@@ -421,7 +421,7 @@ class CurlClient {
 		$this->response->info = curl_getinfo($request);
 		$this->response->info['version'] = $this->version;
 		$this->response->info['proxied'] = $this->proxy;
-	    $this->response->cookies = $this->_parse_cookies();
+	    $this->response->cookies = CurlClient::parse_cookies($this->cookie_file);
 	    $this->_parse_headers();
 	    $this->_populate_body();
 		curl_close($request);
@@ -552,27 +552,6 @@ class CurlClient {
 	}
 
 	/**
-	 * Cookies parser
-	 * @return array
-	 */
-	private function _parse_cookies () {
-		if (isset ($this->cookie_file) AND file_exists($this->cookie_file)) {
-			$cookies_raw = file_get_contents ($this->cookie_file);   
-		    $lines = explode("\n", $cookies_raw);	 
-		    $cookies = array();
-		    foreach ((array) $lines as $line) {	 
-		        if (isset($line[0]) && substr_count($line, "\t") == 6) {		 
-		            $tokens = explode("\t", $line);
-		            $tokens = array_map('trim', $tokens);
-		            $cookies[$tokens[5]] = $tokens[6];
-		        }
-		    }	   
-		    return $cookies;			
-		}
-		return FALSE;
-	}
-
-	/**
 	 * Setup curl option header
 	 */
 	private function _set_headers () {
@@ -653,6 +632,23 @@ class CurlClient {
 		$agents = array_map('rtrim', $agents);
 		return $agents;
 	}
+
+	public static function parse_cookies ($cookie_file = '') {
+		if ( !empty ($cookie_file) AND file_exists($cookie_file)) {
+			$cookies_raw = file_get_contents ($cookie_file);   
+		    $lines = explode("\n", $cookies_raw);	 
+		    $cookies = array();
+		    foreach ((array) $lines as $line) {	 
+		        if (isset($line[0]) && substr_count($line, "\t") == 6) {		 
+		            $tokens = explode("\t", $line);
+		            $tokens = array_map('trim', $tokens);
+		            $cookies[$tokens[5]] = $tokens[6];
+		        }
+		    }	   
+		    return $cookies;			
+		}
+		return FALSE;
+	}	
 
 	/**
 	 * Make request
