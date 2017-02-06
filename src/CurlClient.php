@@ -2,7 +2,7 @@
 /**
  * Simple Curl Client
  * @package Http
- * @version	2.0.0
+ * @version	2.0.1
  */
 namespace AppZz\Http;
 use \AppZz\Helpers\Arr;
@@ -74,6 +74,12 @@ class CurlClient {
 		$options = array_merge ($options, $this->default_options);
 		$this->set_options ($options);
 		$this->version = Arr::get(curl_version(), 'version');
+	}
+
+	public function __destruct() {
+		if (isset($this->cookie_file) AND file_exists($this->cookie_file)) {
+			@unlink ($this->cookie_file);
+		}
 	}
 
 	/**
@@ -207,8 +213,10 @@ class CurlClient {
 	 * @param  string $file
 	 * @return CurlClient
 	 */
-	public function cookie_file ( $file = NULL ) {
-		$this->cookie_file = $file ? $file : tempnam('/tmp', 'curl_');
+	public function cookie_file ($file = NULL) {
+		if ( !empty($this->cookie_file))
+			return $this;
+		$this->cookie_file = $file ? $file : tempnam(sys_get_temp_dir(), 'cclient_');
 		$this->set_option ('CURLOPT_COOKIEJAR', $this->cookie_file);
 		$this->set_option ('CURLOPT_COOKIEFILE', $this->cookie_file);
 		return $this;
@@ -370,7 +378,8 @@ class CurlClient {
 	 * Send Curl request
 	 * @return http-code response
 	 */
-	public function send () {	
+	public function send () {
+		$this->cookie_file();	
 		$this->_prepare_params();
 		$this->_set_headers();
 
