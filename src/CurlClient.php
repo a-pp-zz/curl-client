@@ -76,12 +76,6 @@ class CurlClient {
 		$this->version = Arr::get(curl_version(), 'version');
 	}
 
-	public function __destruct() {
-		if (isset($this->cookie_file) AND file_exists($this->cookie_file)) {
-			@unlink ($this->cookie_file);
-		}
-	}
-
 	/**
 	 * factory
 	 * @param array $options
