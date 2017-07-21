@@ -2,7 +2,7 @@
 /**
  * Simple Curl Client
  * @package Http
- * @version	2.0.1
+ * @version	2.0.2
  */
 namespace AppZz\Http;
 use \AppZz\Helpers\Arr;
@@ -249,9 +249,10 @@ class CurlClient {
 	 * @return CurlClient
 	 */
 	public function proxy ($host = '', array $params = array ()) {
-		$this->set_option ('CURLOPT_HTTPPROXYTUNNEL', TRUE);
 		if ( ! empty ($params)) {
 			extract ($params);
+			if (isset($tunnel))
+				$this->set_option ('CURLOPT_HTTPPROXYTUNNEL', TRUE);
 			if (isset($port))
 				$host . ':' . $port;
 			if (isset($username) AND isset($password))
@@ -420,7 +421,7 @@ class CurlClient {
 		curl_setopt_array($request, $this->options);
 
 		$this->response       = new \stdClass();
-		$this->response->body = curl_exec($request);
+		$this->response->body = $this->response->rawbody = curl_exec($request);
 		$this->response->info = curl_getinfo($request);
 		$this->response->info['version'] = $this->version;
 		$this->response->info['proxied'] = $this->proxy;
@@ -457,15 +458,23 @@ class CurlClient {
 
 	/**
 	 * Get response body text
-	 * @return string
+	 * @return mixed
 	 */
 	public function get_body () {
 		return isset ($this->response->body) ? $this->response->body : FALSE;
 	}
 
 	/**
+	 * Get raw body
+	 * @return mixed
+	 */
+	public function get_rawbody () {
+		return isset ($this->response->rawbody) ? $this->response->rawbody : FALSE;
+	}	
+
+	/**
 	 * Get info about request
-	 * @return array
+	 * @return mixed
 	 */
 	public function get_info () {
 		return isset ($this->response->info) ? $this->response->info : FALSE;
@@ -473,7 +482,7 @@ class CurlClient {
 
 	/**
 	 * Get response headers
-	 * @return array
+	 * @return mixed
 	 */
 	public function get_headers () {
 		return isset ($this->response->headers) ? $this->response->headers : FALSE;
