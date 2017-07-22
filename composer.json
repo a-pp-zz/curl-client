@@ -2,7 +2,6 @@
     "name": "appzz/curl-client",
     "description": "Lightweight curl-client without any ugly dependencies and works on php>=5.3.3",
     "type": "library",
-    "version": "2.0.0",
     "keywords": [
         "curl",
         "curl-client"
