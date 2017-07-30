@@ -6,12 +6,12 @@
         "curl",
         "curl-client"
     ],
-    "homepage": "https://www.bitbucket.org/a-pp-zz/curl-client.git",
-    "license": "Apache-2.0",
+    "homepage": "https://github.com/a-pp-zz/curl-client",
+    "license": "MIT",
     "authors": [
         {
             "name": "CoolSwitcher",
-            "email": "ds@appzz.tech",
+            "email": "ds@appzz.pw",
             "role": "lead"
         }
     ],
