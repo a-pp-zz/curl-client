@@ -259,37 +259,42 @@ class CurlClient {
 			'password' => NULL,
 		);
 
-		$url_parts = parse_url ($host);
-		$host = Arr::get ($url_parts, 'host');
-		$port = Arr::get ($url_parts, 'port');
-
-		if ($port) {
-			$defaults['port'] = $port;
-		}
-
-		if ( ! $host) {
-			return $this;
+		if (strpos($host, ':') !== FALSE) {
+			$url_parts = explode (':', $host);
+			$host = Arr::get($url_parts, 0);
+			$defaults['port'] = Arr::get($url_parts, 1);
 		}
 
 		$params = array_merge ($defaults, $params);
 
 		if ( ! empty ($params)) {
 			extract ($params);
-			if (isset($tunnel))
+
+			if ( ! empty ($tunnel)) {
 				$this->set_option ('CURLOPT_HTTPPROXYTUNNEL', TRUE);
-			if (isset($port))
-				$host . ':' . $port;
-			if (isset($username) AND isset($password))
-				$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");
-			if (isset($auth)) {
-				$auth = strtoupper ($auth);
-				if ( in_array ($auth, array ('BASIC', 'NTLM')))
-					$this->set_option ('CURLOPT_PROXYAUTH', constant('CURLAUTH_'.$auth));
 			}
-			if (isset($type)) {
+
+			if ( ! empty ($port)) {
+				$host .= ':' . $port;
+			}
+
+			if ( ! empty ($username) AND ! empty ($password)) {
+				$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");
+			}
+
+			if ( ! empty ($auth)) {
+				$auth = strtoupper ($auth);
+				if (in_array ($auth, array ('BASIC', 'NTLM'))) {
+					$this->set_option ('CURLOPT_PROXYAUTH', constant('CURLAUTH_'.$auth));
+				}
+			}
+
+			if ( ! empty ($type)) {
 				$type = strtoupper ($type);
-				if ( in_array ($type, array ('HTTP', 'SOCKS4', 'SOCKS5', 'SOCKS4A', 'SOCKS5_HOSTNAME')))
+
+				if (in_array ($type, array ('HTTP', 'SOCKS4', 'SOCKS5', 'SOCKS4A', 'SOCKS5_HOSTNAME'))) {
 					$this->set_option ('CURLOPT_PROXYTYPE', constant('CURLPROXY_'.$type));
+				}
 			}
 		}
 
