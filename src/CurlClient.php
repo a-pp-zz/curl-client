@@ -2,7 +2,7 @@
 /**
  * Simple Curl Client
  * @package Http
- * @version	2.0.2
+ * @version	3.0.0
  */
 namespace AppZz\Http;
 use \AppZz\Helpers\Arr;
@@ -13,86 +13,114 @@ class CurlClient {
 	 * default curl options
 	 * @var array
 	 */
-	private $default_options = array (
+	private $_default_options = [
 		'CURLOPT_HEADER'         => TRUE,
-		'CURLOPT_USERAGENT'      => 'AppZz Curl Client',
+		'CURLOPT_USERAGENT'      => CurlClient\Agent::UA_DEFAULT,
 		'CURLOPT_TIMEOUT'        => 30,
 		'CURLOPT_FOLLOWLOCATION' => TRUE,
 		'CURLOPT_RETURNTRANSFER' => TRUE,
 		'CURLOPT_MAXREDIRS'      => 3,
 		'CURLOPT_ENCODING'		 => '',
-	);
+		'CURLOPT_AUTOREFERER'    => TRUE,
+		'CURLOPT_COOKIEFILE'     => '',
+		'CURLOPT_HTTP_VERSION'   => CURL_HTTP_VERSION_1_1,
+		'CURLOPT_IPRESOLVE'      => CURL_IPRESOLVE_V4
+	];
 
 	/**
-	 * Curl version
-	 * @var string
-	 */
-	private $version;
-
-	/**
-	 * proxy ?
-	 * @var boolean
-	 */
-	private $proxy = FALSE;
-
-	/**
-	 * popular clients
-	 */
-	const CURL_CLIENT_CHROME  = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36';
-	const CURL_CLIENT_FIREFOX = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.11; rv:47.0) Gecko/20100101 Firefox/47.0';
-	const CURL_CLIENT_SAFARI  = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/601.7.7 (KHTML, like Gecko) Version/9.1.2 Safari/601.7.7';
-	const CURL_CLIENT_MSIE11  = 'Mozilla/5.0 (Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko';
-	const CURL_CLIENT_MSIE10  = 'Mozilla/5.0 (compatible; WOW64; MSIE 10.0; Windows NT 6.2)';
-	const CURL_CLIENT_MSIE9   = 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)';
-	const CURL_CLIENT_MSIE8   = 'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.0; Trident/4.0)';
-
-	/**
-	 * class params
-	 */
-	private $url,
-			$method,
-			$mime,
-			$mimes,
-			$params,
-			$file,
-			$cookie_file,
-			$headers,
-			$options,
-			$response;
-
-	/**
-	 * default charset
 	 * @var string
 	 */
 	public static $charset = 'utf-8';
 
 	/**
-	 * __constructor
-	 * @param array $options
+	 * class params
 	 */
-	public function __construct (array $options = array ()) {
-		$options = array_merge ($options, $this->default_options);
+	private $_url;
+	private $_method;
+	private $_content_type;
+	private $_payload;
+	private $_query;
+	private $_headers;
+	private $_response;
+	private $_http_version = 2;
+	private $_verbose;
+
+	const GET    = 'GET';
+	const HEAD   = 'HEAD';
+	const POST   = 'POST';
+	const PUT    = 'PUT';
+	const PATCH  = 'PATCH';
+	const DELETE = 'DELETE';
+
+	public function __construct (array $options = [])
+	{
+		$options = array_merge ($options, $this->_default_options);
 		$this->set_options ($options);
-		$this->version = Arr::get(curl_version(), 'version');
+		$this->_headers = new CurlClient\Headers;
+	}
+
+	public static function factory (array $options = [])
+	{
+		return new CurlClient ($options);
+	}
+
+	public static function curl_version ()
+	{
+		return Arr::get(curl_version(), 'version');
 	}
 
 	/**
-	 * factory
-	 * @param array $options
-	 * @return class object
+	 * Enable http2 requests
+	 * @return CurlClient
 	 */
-	public static function factory (array $options = array ()) {
-		return new CurlClient ($options);
+	public function http2 ()
+	{
+		$this->set_option ('CURLOPT_HTTP_VERSION', CURL_HTTP_VERSION_2_0);
+		$this->_http_version = 2;
+		return $this;
+	}
+
+	/**
+	 * Enable http 1.1 requests
+	 * @return CurlClient
+	 */
+	public function http11 ()
+	{
+		$this->set_option ('CURLOPT_HTTP_VERSION', CURL_HTTP_VERSION_1_1);
+		$this->_http_version = 1.1;
+		return $this;
+	}
+
+	/**
+	 * Force ipv4
+	 * @return CurlClient
+	 */
+	public function ipv4 ()
+	{
+		$this->set_option ('CURLOPT_IPRESOLVE', 'CURL_IPRESOLVE_V4');
+		return $this;
+	}
+
+	/**
+	 * Force ipv6
+	 * @return CurlClient
+	 */
+	public function ipv6 ()
+	{
+		$this->set_option ('CURLOPT_IPRESOLVE', 'CURL_IPRESOLVE_V6');
+		return $this;
 	}
 
 	/**
 	 * Set curl options
 	 * @param array $options curl options by array
 	 */
-	public function set_options ($options = array()) {
-		foreach ( (array) $options as $key => $value) {
+	public function set_options (array $options = [])
+	{
+		foreach ($options as $key => $value) {
 			$this->set_option($key, $value);
 		}
+
 		return $this;
 	}
 
@@ -101,14 +129,17 @@ class CurlClient {
 	 * @param string $key
 	 * @param string $value
 	 */
-	public function set_option ($key = '', $value = '') {
+	public function set_option ($key = '', $value = '')
+	{
 		if (is_string($key) AND !is_numeric($key)) {
 			$const = strtoupper($key);
+
 			if (defined($const)) {
 				$key = constant(strtoupper($key));
-				$this->options[$key] = $value;
+				$this->_options[$key] = $value;
 			}
 		}
+
 		return $this;
 	}
 
@@ -117,9 +148,9 @@ class CurlClient {
 	 * @param  string $url
 	 * @return CurlClient
 	 */
-	public function uri ($url) {
-		if ($url)
-			$this->url = $url;
+	public function url ($url)
+	{
+		$this->_url = $url;
 		return $this;
 	}
 
@@ -128,13 +159,21 @@ class CurlClient {
 	 * @param  string $method
 	 * @return CurlClient
 	 */
-	public function method ($method = 'get') {
-		$this->method = strtoupper($method);
+	public function method ($method = 'get')
+	{
+		$this->_method = $method;
 		return $this;
 	}
 
-	public function file ($file = NULL) {
-		$this->file = $file;
+	public function file ($file = NULL)
+	{
+		$this->_file = $file;
+		return $this;
+	}
+
+	public function verbose ($verbose = TRUE)
+	{
+		$this->_verbose = $verbose;
 		return $this;
 	}
 
@@ -142,7 +181,8 @@ class CurlClient {
 	 * Disable response headers
 	 * @return CurlClient
 	 */
-	public function no_headers() {
+	public function no_headers ()
+	{
 		$this->set_option ('CURLOPT_HEADER', FALSE);
 		return $this;
 	}
@@ -153,9 +193,17 @@ class CurlClient {
 	 * @param string $value
 	 * @return CurlClient
 	 */
-	public function add_header ($key, $value) {
-		if ( !empty ($key) AND !empty($value))
-			$this->headers[$key] = $value;
+	public function header ($key, $value)
+	{
+		if ( ! empty ($key) AND ! empty ($value)) {
+
+			if ($this->_http_version === 2) {
+				$key = mb_strtolower ($key);
+			}
+
+			$this->_headers->offsetSet ($key, $value);
+		}
+
 		return $this;
 	}
 
@@ -164,55 +212,62 @@ class CurlClient {
 	 * @param array $headers
 	 * @return CurlClient
 	 */
-	public function add_headers (array $headers) {
+	public function headers (array $headers = [])
+	{
 		foreach ($headers as $key => $value) {
-			$this->add_header($key, $value);
+			$this->header ($key, $value);
 		}
+
 		return $this;
 	}
 
 	/**
-	 * Set mime-type
-	 * @param  string $mime mime-type
+	 * Add cookies
+	 * @param  mixed $cookies
 	 * @return CurlClient
 	 */
-	public function mime ($mime = NULL) {
-		switch ($mime) {
+	public function cookies ($cookies = '')
+	{
+		if (is_array ($cookies)) {
+			$cookies = new CurlClient\Cookies ($cookies);
+		}
+
+		$this->set_option('CURLOPT_COOKIE', $cookies);
+
+		return $this;
+	}
+
+	public function content_type ($type = 'text')
+	{
+		switch ($type) {
 			case 'text':
-				$this->add_header('Content-Type' ,'text/plain; charset=' . CurlClient::$charset);
+				$this->header('Content-Type', 'text/plain; charset=' . CurlClient::$charset);
 			break;
+
 			case 'form':
-				$this->add_header('Content-Type', 'application/x-www-form-urlencoded; charset=' . CurlClient::$charset);
+				$this->header('Content-Type', 'application/x-www-form-urlencoded; charset=' . CurlClient::$charset);
 			break;
+
 			case 'upload':
-				$this->_get_mime_types();
-				$this->add_header('Content-Type', 'multipart/form-data; charset=' . CurlClient::$charset);
+			case 'multipart':
+				$type = 'multipart';
+				$this->header('Content-Type', 'multipart/form-data; charset=' . CurlClient::$charset);
 			break;
+
 			case 'json':
-				$this->add_header('Content-Type', 'application/json; charset=' . CurlClient::$charset);
+				$this->header('Content-Type', 'application/json; charset=' . CurlClient::$charset);
 			break;
+
 			case 'xml':
-				$this->add_header('Content-Type', 'text/xml; charset=' . CurlClient::$charset);
+				$this->header('Content-Type', 'text/xml; charset=' . CurlClient::$charset);
 			break;
+
 			case 'html':
-				$this->add_header('Content-Type', 'text/html; charset=' . CurlClient::$charset);
+				$this->header('Content-Type', 'text/html; charset=' . CurlClient::$charset);
 			break;
 		}
-		$this->mime = $mime;
-		return $this;
-	}
 
-	/**
-	 * Set cookie-file location
-	 * @param  string $file
-	 * @return CurlClient
-	 */
-	public function cookie_file ($file = NULL) {
-		if ( !empty($this->cookie_file))
-			return $this;
-		$this->cookie_file = $file ? $file : tempnam(sys_get_temp_dir(), 'cclient_');
-		$this->set_option ('CURLOPT_COOKIEJAR', $this->cookie_file);
-		$this->set_option ('CURLOPT_COOKIEFILE', $this->cookie_file);
+		$this->_content_type = $type;
 		return $this;
 	}
 
@@ -221,11 +276,13 @@ class CurlClient {
 	 * @param  boolean $strict
 	 * @return CurlClient
 	 */
-	public function strict_ssl ($strict = TRUE) {
+	public function strict_ssl ($strict = TRUE)
+	{
 		if ($strict === FALSE) {
 			$this->set_option ('CURLOPT_SSL_VERIFYPEER', FALSE);
 			$this->set_option ('CURLOPT_SSL_VERIFYHOST', FALSE);
 		}
+
 		return $this;
 	}
 
@@ -236,7 +293,8 @@ class CurlClient {
 	 * @param  string $type
 	 * @return CurlClient
 	 */
-	public function auth ($username = '', $password = '', $type = 'basic') {
+	public function auth ($username = '', $password = '', $type = 'basic')
+	{
 		$this->set_option ('CURLOPT_HTTPAUTH', constant ('CURLAUTH_'.strtoupper($type)));
 		$this->set_option ('CURLOPT_USERPWD', "{$username}:{$password}");
 		return $this;
@@ -248,79 +306,55 @@ class CurlClient {
 	 * @param  array  $params
 	 * @return CurlClient
 	 */
-	public function proxy ($host = '', array $params = array ()) {
+	public function proxy ($host = '', array $params = [])
+	{
+		$proxy = new CurlClient\Proxy ($host, $params);
 
-		$defaults = array (
-			'port'     => 8080,
-			'type'     => 'http',
-			'tunnel'   => FALSE,
-			'auth'     => NULL,
-			'username' => NULL,
-			'password' => NULL,
-		);
+		if ($proxy->is_valid()) {
 
-		if (strpos($host, ':') !== FALSE) {
-			$url_parts = explode (':', $host);
-			$host = Arr::get($url_parts, 0);
-			$defaults['port'] = Arr::get($url_parts, 1);
-		}
-
-		$params = array_merge ($defaults, $params);
-
-		if ( ! empty ($params)) {
-			extract ($params);
-
-			if ( ! empty ($tunnel)) {
+			if ( ! empty ($proxy->tunnel)) {
 				$this->set_option ('CURLOPT_HTTPPROXYTUNNEL', TRUE);
 			}
 
-			if ( ! empty ($port)) {
-				$host .= ':' . $port;
+			if ( ! empty ($proxy->userpwd)) {
+				$this->set_option ('CURLOPT_PROXYUSERPWD', $proxy->userpwd);
 			}
 
-			if ( ! empty ($username) AND ! empty ($password)) {
-				$this->set_option ('CURLOPT_PROXYUSERPWD', "{$username}:{$password}");
+			if ( ! empty ($proxy->authtype)) {
+				$this->set_option ('CURLOPT_PROXYAUTH', $proxy->authtype);
 			}
 
-			if ( ! empty ($auth)) {
-				$auth = strtoupper ($auth);
-				if (in_array ($auth, array ('BASIC', 'NTLM'))) {
-					$this->set_option ('CURLOPT_PROXYAUTH', constant('CURLAUTH_'.$auth));
-				}
+			if ( ! empty ($proxy->type)) {
+				$this->set_option ('CURLOPT_PROXYTYPE', $proxy->type);
 			}
 
-			if ( ! empty ($type)) {
-				$type = strtoupper ($type);
-
-				if (in_array ($type, array ('HTTP', 'SOCKS4', 'SOCKS5', 'SOCKS4A', 'SOCKS5_HOSTNAME'))) {
-					$this->set_option ('CURLOPT_PROXYTYPE', constant('CURLPROXY_'.$type));
-				}
-			}
+			$this->set_option ('CURLOPT_PROXY', $proxy->hostname . ':' . $proxy->port);
+			//$this->set_option ('CURLOPT_PROXYPORT', $proxy->port);
 		}
 
-		$this->set_option ('CURLOPT_PROXY', $host);
-		$this->proxy = TRUE;
 		return $this;
 	}
 
 	/**
-	 * Set user-agent
+	 * Set user-agent by shortname eg chrome_win, chrome_mac, msie11 etc
 	 * @param string $agent
+	 * @param string $platform
 	 * @return CurlClient
 	 */
-	public function agent ($agent = '') {
-		if ($agent=='random') {
-			$agents = $this->_get_user_agents();
-			shuffle ($agents);
-			$agent = array_shift($agents);
-		}
-		else {
-			$rf = new \ReflectionClass("\AppZz\Http\CurlClient");
-			if ($rf->hasConstant('CURL_CLIENT_'.strtoupper($agent))) {
-				$agent = constant('\AppZz\Http\CurlClient::CURL_CLIENT_'.strtoupper($agent));
-			}
-		}
-		$this->set_option ('CURLOPT_USERAGENT', $agent);
+	public function browser ($agent = '', $platform = '')
+	{
+		$agents = new CurlClient\Agent;
+		return $this->user_agent ($agents->get ($agent, $platform));
+	}
+
+	/**
+	 * Set raw user agent
+	 * @param  string $user_agent
+	 * @return CurlClient
+	 */
+	public function user_agent ($user_agent = '')
+	{
+		$this->set_option ('CURLOPT_USERAGENT', $user_agent);
 		return $this;
 	}
 
@@ -329,7 +363,8 @@ class CurlClient {
 	 * @param string $referer
 	 * @return CurlClient
 	 */
-	public function referer ($referer = '') {
+	public function referer ($referer = '')
+	{
 		$this->set_option ('CURLOPT_REFERER', $referer);
 		return $this;
 	}
@@ -339,7 +374,8 @@ class CurlClient {
 	 * @param integer $timeout
 	 * @return CurlClient
 	 */
-	public function timeout ($timeout = 30) {
+	public function timeout ($timeout = 30)
+	{
 		$this->set_option ('CURLOPT_TIMEOUT', $timeout);
 		return $this;
 	}
@@ -351,7 +387,8 @@ class CurlClient {
 	 * @param  string $language
 	 * @return CurlClient
 	 */
-	public function accept ($accept = '*/*', $encoding = NULL, $language = 'ru-RU') {
+	public function accept ($accept = '*/*', $encoding = NULL, $language = 'ru-RU')
+	{
 		switch ($accept) {
 			case 'html':
 				$accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8';
@@ -363,14 +400,20 @@ class CurlClient {
 				$accept = '*/*';
 			break;
 		}
-		if ($accept)
-			$this->add_header('Accept', $accept);
+
+		if ($accept) {
+			$this->header('Accept', $accept);
+		}
+
 		if ($encoding) {
 			$this->set_option('CURLOPT_ENCODING', $encoding);
-			$this->add_header('Accept-Encoding', $encoding);
+			$this->header('Accept-Encoding', $encoding);
 		}
-		if ($language)
-			$this->add_header('Accept-Language', $language);
+
+		if ($language) {
+			$this->header('Accept-Language', $language);
+		}
+
 		return $this;
 	}
 
@@ -379,12 +422,26 @@ class CurlClient {
 	 * @param  string $request json|xml
 	 * @return CurlClient
 	 */
-	public function ajax ($request = 'json') {
-		$headers = array (
-			'X-Request'=>strtoupper($request),
-			'X-Requested-With'=>'XMLHttpRequest'
-		);
-		$this->add_headers($headers);
+	public function ajax ($request = 'json')
+	{
+		$headers = [
+			'X-Request'        => strtoupper($request),
+			'X-Requested-With' => 'XMLHttpRequest'
+		];
+
+		$this->headers ($headers);
+		return $this;
+	}
+
+	public function json ()
+	{
+		$this->content_type ('json');
+		return $this;
+	}
+
+	public function form ()
+	{
+		$this->content_type ('form');
 		return $this;
 	}
 
@@ -393,8 +450,15 @@ class CurlClient {
 	 * @param  array  $params
 	 * @return CurlClient
 	 */
-	public function params ($params = array()) {
-		$this->params = $params;
+	public function payload ($params = [])
+	{
+		$this->_payload = $params;
+		return $this;
+	}
+
+	public function query (array $params = [])
+	{
+		$this->_query = $params;
 		return $this;
 	}
 
@@ -402,25 +466,30 @@ class CurlClient {
 	 * Send Curl request
 	 * @return http-code response
 	 */
-	public function send () {
-		$this->cookie_file();
-		$this->_prepare_params();
-		$this->_set_headers();
+	public function send ()
+	{
+		$this->_prepare ();
+		$this->_set_headers ();
 
-		switch ($this->method) {
-			case 'GET' :
+		switch ($this->_method) {
+			case CurlClient::GET :
+			case CurlClient::HEAD :
+				if ( ! empty ($this->_query)) :
+					$this->_url .= '?' . http_build_query($this->_query);
+				endif;
+
+				if ($this->_method === CurlClient::HEAD) :
+					$this->set_option('CURLOPT_HEADER', TRUE);
+					$this->set_option('CURLOPT_NOBODY', TRUE);
+					$this->set_option ('CURLOPT_CUSTOMREQUEST', $this->_method);
+				endif;
 			break;
 
-			case 'POST' :
-				$this->set_option ('CURLOPT_POST', TRUE);
-				$this->set_option ('CURLOPT_POSTFIELDS', $this->params);
-			break;
-
-			case 'PUT' :
-				if ($this->file AND file_exists($this->file)) {
-					$fp = fopen ($this->file, 'r');
-					$filesize = filesize($this->file);
-					$this->url .= DIRECTORY_SEPARATOR . basename($this->file);
+			case CurlClient::PUT :
+				if ($this->_file AND file_exists($this->_file)) {
+					$fp = fopen ($this->_file, 'rb');
+					$filesize = filesize ($this->_file);
+					$this->_url .= DIRECTORY_SEPARATOR . basename ($this->_file);
 					$this->set_option ('CURLOPT_PUT', TRUE);
 					$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
 					$this->set_option ('CURLOPT_INFILE', $fp);
@@ -429,39 +498,45 @@ class CurlClient {
 				}
 			break;
 
-			case 'HEAD' :
-				$this->set_option('CURLOPT_HEADER', TRUE);
-				$this->set_option('CURLOPT_NOBODY', TRUE);
-				$this->set_option ('CURLOPT_CUSTOMREQUEST', $this->method);
-			break;
-
-			case 'DELETE' :
-				if ($this->file) {
-					$this->url .= DIRECTORY_SEPARATOR . basename($this->file);
-				}
-
 			default:
-				$this->set_option ('CURLOPT_CUSTOMREQUEST', $this->method);
-				$this->set_option ('CURLOPT_POSTFIELDS', $this->params);
+				if ($this->_file) :
+					$this->_url .= DIRECTORY_SEPARATOR . basename($this->_file);
+				endif;
+
+				if ($this->_method === CurlClient::POST):
+					$this->set_option ('CURLOPT_POST', TRUE);
+				else :
+					$this->set_option ('CURLOPT_CUSTOMREQUEST', $this->_method);
+				endif;
+
+				if ( ! empty ($this->_payload)) :
+					$this->set_option ('CURLOPT_POSTFIELDS', $this->_payload);
+				endif;
 			break;
 		}
 
-		$request = curl_init ($this->url);
-		curl_setopt_array($request, $this->options);
+        $request = curl_init ($this->_url);
+        $verbose = NULL;
 
-		$this->response       = new \stdClass();
-		$this->response->body = $this->response->rawbody = curl_exec($request);
-		$this->response->info = curl_getinfo($request);
-		$this->response->info['version'] = $this->version;
-		$this->response->info['proxied'] = $this->proxy;
-	    $this->response->cookies = CurlClient::parse_cookies($this->cookie_file);
-	    $this->_parse_headers();
-	    $this->_populate_body();
-		curl_close($request);
+		if ($this->_verbose) {
+        	$this->set_option('CURLOPT_VERBOSE', true);
+			$verbose = fopen('php://temp', 'w+');
+			$this->set_option('CURLOPT_STDERR', $verbose);
+		}
+
+        curl_setopt_array($request, $this->_options);
+
+		$this->_response = new CurlClient\Response ($request, $verbose);
+
 		if (isset($fp)) {
 			fclose($fp);
 		}
-		return Arr::path($this->response, 'info.http_code');
+
+		if ($verbose) {
+			fclose ($verbose);
+		}
+
+		return $this->_response;
 	}
 
 	/**
@@ -469,163 +544,79 @@ class CurlClient {
 	 * @param  string $path
 	 * @return http-code or false on error
 	 */
-	public function download ($path = '/tmp') {
-		if ( file_exists($path) AND is_dir($path) AND is_writeable($path))
-			$path .= DIRECTORY_SEPARATOR . basename($this->url);
-		elseif ( file_exists($path) AND !is_writeable($path))
+	public function download ($download_path = '/tmp', $filename = NULL)
+	{
+		if (file_exists ($path) AND is_dir ($path) AND is_writeable ($path)) {
+			$filename = empty ($filename) ? basename($this->_url) : $filename;
+			$download_path .= DIRECTORY_SEPARATOR . $filename;
+		}
+		elseif (file_exists ($download_path) AND ! is_writeable ($download_path)) {
 			return FALSE;
-		elseif ( !is_writeable(dirname($path)))
+		}
+		elseif ( ! is_writeable (dirname($download_path))) {
 			return FALSE;
+		}
+
 		$this->no_headers();
 		$ret = $this->send();
+
 		if ($ret === 200) {
-			file_put_contents($path, $this->get_body());
+			file_put_contents ($download_path, $this->get_body());
 			return $ret;
 		}
+
 		return FALSE;
 	}
 
 	/**
-	 * Get response body text
+	 * Get request headers
 	 * @return mixed
 	 */
-	public function get_body () {
-		return isset ($this->response->body) ? $this->response->body : FALSE;
-	}
-
-	/**
-	 * Get raw body
-	 * @return mixed
-	 */
-	public function get_rawbody () {
-		return isset ($this->response->rawbody) ? $this->response->rawbody : FALSE;
-	}
-
-	/**
-	 * Get info about request
-	 * @return mixed
-	 */
-	public function get_info () {
-		return isset ($this->response->info) ? $this->response->info : FALSE;
-	}
-
-	/**
-	 * Get response headers
-	 * @return mixed
-	 */
-	public function get_headers () {
-		return isset ($this->response->headers) ? $this->response->headers : FALSE;
-	}
-
-	/**
-	 * Get cookies
-	 * @return array
-	 */
-	public function get_cookies ($as_string = FALSE) {
-		if ( $as_string AND !empty ($this->response->cookies)) {
-			$cookies = '';
-			$cnt = 0;
-			foreach ($this->response->cookies as $k=>$v) {
-				$cnt++;
-				$cookies .= "{$k}={$v}";
-				if ( sizeof($this->response->cookies) != $cnt)
-					$cookies .= '; ';
-			}
-			return $cookies;
-		}
-		return isset ($this->response->cookies) ? $this->response->cookies : FALSE;
-	}
-
-	/**
-	 * Get full response object
-	 * @return object
-	 */
-	public function get_response () {
-		return $this->response;
-	}
-
-	/**
-	 * Post-process on body
-	 * @return CurlClient
-	 */
-	private function _populate_body () {
-		$encoding     = Arr::path ($this->response, 'headers.Content-Encoding');
-		$content_type = Arr::path ($this->response, 'headers.Content-Type');
-
-	    if (strpos($content_type, 'json'))
-	    	$this->response->body = json_decode($this->response->body, TRUE);
-	    elseif (strpos($content_type, 'xml')) {
-			$object = simplexml_load_string ($this->response->body, "SimpleXMLElement", LIBXML_NOCDATA);
-			$this->response->body = json_decode(json_encode($object), TRUE);
-			unset ($object);
-	    }
-	    return $this;
-	}
-
-	/**
-	 * Headers parser
-	 * @return boolean
-	 */
-	private function _parse_headers () {
-	    $headers_size = isset($this->response->info['header_size']) ? $this->response->info['header_size'] : 0;
-	    $headers = array ();
-
-	    if ($headers_size > 0) {
-
-	        $lines = array_slice(explode("\r\n", trim(substr($this->response->body, 0, $headers_size))), 1);
-
-	        foreach ( $lines as $line ) {
-	            if ( strpos(trim($line), ': ') !== FALSE ) {
-	                list($key, $value) = explode(': ', $line);
-	                if ( $key == 'Content-Disposition' AND preg_match ('#filename\="(.*)"#iu', $value, $pr ) ) {
-	                	$headers['Content-Disposition-Filename'] = $pr[1];
-	                }
-	                $headers[$key] = $value;
-	            }
-	        }
-
-	        if ( sizeof ($headers) > 0) {
-	        	$this->response->body = mb_substr ($this->response->body, $headers_size);
-	        	$this->response->headers = $headers;
-	        }
-	    }
-	    return (bool) $headers_size;
+	public function get_headers ()
+	{
+		return $this->_headers;
 	}
 
 	/**
 	 * Setup curl option header
 	 */
-	private function _set_headers () {
-		if ($this->headers) {
-			$headers = array ();
-			foreach ($this->headers as $k=>$v)
+	private function _set_headers ()
+	{
+		if ($this->_headers) {
+			$headers = [];
+			$this->_headers = $this->_headers->asArray();
+
+			foreach ($this->_headers as $k=>$v) {
 				$headers[] = "{$k}: {$v}";
+			}
+
 			$this->set_option ('CURLOPT_HTTPHEADER', (array) $headers);
 		}
+
 		return $this;
 	}
 
 	/**
-	 * Prepare url and payload params
+	 * Prepare payload params
 	 * @return CurlClient
 	 */
-	private function _prepare_params () {
-		if ( in_array($this->method, array('GET', 'HEAD'))) {
-			$this->params = (array) $this->params;
-			if ( !empty ($this->params))
-				$this->url = $this->url . '?' . http_build_query($this->params);
+	private function _prepare ()
+	{
+		if ( ! empty ($this->_payload) AND $this->_content_type == 'form') {
+			$this->_payload = http_build_query ($this->_payload);
 		}
-		elseif ($this->mime == 'form') {
-			$this->params = http_build_query($this->params);
-		}
-		elseif ($this->mime == 'upload') {
+		elseif ($this->_content_type == 'multipart') {
+			$mimes = new CurlClient\Mimes;
+
 			foreach ($this->params as $key=>&$value) {
-				if ( preg_match('#\.\w{2,5}$#iu', $value)) {
-					if ( class_exists('\CURLFile')) {
+				if (preg_match('#\.\w{2,5}$#iu', $value)) {
+					if (class_exists('\CURLFile')) {
 						$ext = pathinfo ($value, PATHINFO_EXTENSION);
-						$postname = pathinfo ($value, PATHINFO_BASENAME);
-						if ( isset($this->mimes[$ext])) {
-							$value = new \CURLFile($value, $this->mimes[$ext], $postname);
+						$name = pathinfo ($value, PATHINFO_BASENAME);
+						$mime = $mimes->get ($ext);
+
+						if ( ! empty ($mime)) {
+							$value = new \CURLFile($value, $mime, $name);
 						}
 					} else {
 						$value = '@' . $value;
@@ -634,61 +625,17 @@ class CurlClient {
 			}
 		}
 		else {
-			if ($this->mime == 'json') {
-				$this->params = json_encode ((array) $this->params);
-			}
-			if (empty($this->file) AND !is_array($this->params))
-				$this->add_header('Content-Length', mb_strlen($this->params));
-		}
-	}
-
-	/**
-	 * get allowed mime types
-	 * @return CurlClient
-	 */
-	private function _get_mime_types () {
-		$mimes = file (dirname(__DIR__) . '/assets/Mime.txt');
-		$mimes = array_map('rtrim', $mimes);
-		$this->mimes = array();
-		foreach ($mimes as $m) {
-			list ($ext, $type) = explode (' ', $m);
-			$exts = explode ('|', $ext);
-			if ($exts) {
-				foreach ($exts as $ex) {
-					$this->mimes[$ex] = $type;
+			if ($this->_content_type == 'json') {
+				if (is_array($this->_payload) OR is_object($this->_payload)) {
+					$this->_payload = json_encode ($this->_payload);
 				}
-			} else {
-				$this->mimes[$ext] = $type;
+			}
+			if (empty($this->_file) AND is_scalar($this->_payload)) {
+				$this->header ('Content-Length', mb_strlen ($this->_payload));
 			}
 		}
+
 		return $this;
-	}
-
-	/**
-	 * get user agents
-	 * @return array
-	 */
-	private function _get_user_agents () {
-		$agents = file (dirname(__DIR__) . '/assets/Agents.txt');
-		$agents = array_map('rtrim', $agents);
-		return $agents;
-	}
-
-	public static function parse_cookies ($cookie_file = '') {
-		if ( !empty ($cookie_file) AND file_exists($cookie_file)) {
-			$cookies_raw = file_get_contents ($cookie_file);
-		    $lines = explode("\n", $cookies_raw);
-		    $cookies = array();
-		    foreach ((array) $lines as $line) {
-		        if (isset($line[0]) && substr_count($line, "\t") == 6) {
-		            $tokens = explode("\t", $line);
-		            $tokens = array_map('trim', $tokens);
-		            $cookies[$tokens[5]] = $tokens[6];
-		        }
-		    }
-		    return $cookies;
-		}
-		return FALSE;
 	}
 
 	/**
@@ -696,20 +643,26 @@ class CurlClient {
 	 * @param  string $url
 	 * @param  string $method  http-method
 	 * @param  array  $params
-	 * @param  string  $file
 	 * @param  array  $headers
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function request ($url, $method = 'get', $params = array(), $file = NULL, $headers = array(), $options = array()) {
-		return CurlClient::factory ($options)
-				->uri($url)
+	public static function request ($url, $method = CurlClient::GET, $params = [], array $headers = [], array $options = [])
+	{
+		$curl = CurlClient::factory ($options)
+				->url($url)
 				->method($method)
-				->params($params)
-				->file($file)
 				->accept()
-				->add_headers($headers)
+				->headers($headers)
 				->set_options($options);
+
+		if ($method === CurlClient::GET OR $method === CurlClient::HEAD) {
+			$curl->query ($params);
+		} else {
+			$curl->payload ($params);
+		}
+
+		return $curl;
 	}
 
 	/**
@@ -720,8 +673,9 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function head ($url, $params = array(), $headers = array (), $options = array()) {
-		return CurlClient::request($url, 'head', $params, NULL, $headers, $options);
+	public static function head ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request($url, CurlClient::HEAD, $params, $headers, $options);
 	}
 
 	/**
@@ -731,8 +685,9 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function get ($url, $params = array(), $headers = array (), $options = array ()) {
-		return CurlClient::request($url, 'get', $params, NULL, $headers, $options);
+	public static function get ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request($url, CurlClient::GET, $params, $headers, $options);
 	}
 
 	/**
@@ -742,8 +697,9 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function post ($url, $params = array(), $headers = array (), $options = array ()) {
-		return CurlClient::request($url, 'post', $params, NULL, $headers, $options);
+	public static function post ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request($url, CurlClient::POST, $params, $headers, $options);
 	}
 
 	/**
@@ -753,8 +709,9 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function put ($url, $params = array(), $file = NULL, $headers = array (), $options = array ()) {
-		return CurlClient::request($url, 'put', $params, $file, $headers, $options);
+	public static function put ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request ($url, CurlClient::PUT, $params, $headers, $options);
 	}
 
 	/**
@@ -764,8 +721,9 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function patch ($url, $params = array(), $headers = array (), $options = array ()) {
-		return CurlClient::request($url, 'patch', $params, $headers, $options);
+	public static function patch ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request ($url, CurlClient::PATCH, $params, $headers, $options);
 	}
 
 	/**
@@ -775,7 +733,8 @@ class CurlClient {
 	 * @param  array  $options curl options
 	 * @return CurlClient
 	 */
-	public static function delete ($url, $params = array(), $headers = array (), $options = array ()) {
-		return CurlClient::request($url, 'delete', $params, $headers, $options);
+	public static function delete ($url, $params = [], $headers = [], $options = [])
+	{
+		return CurlClient::request ($url, CurlClient::DELETE, $params, $headers, $options);
 	}
 }

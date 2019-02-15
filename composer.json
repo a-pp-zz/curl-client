@@ -1,6 +1,6 @@
 {
     "name": "appzz/curl-client",
-    "description": "Lightweight curl-client without any ugly dependencies and works on php>=5.3.3",
+    "description": "Lightweight curl-client",
     "type": "library",
     "keywords": [
         "curl",
@@ -16,7 +16,7 @@
         }
     ],
     "require": {
-        "php": ">=5.3.3",
+        "php": ">=5.6",
         "appzz/arr": "1.*"
     },
     "autoload": {
