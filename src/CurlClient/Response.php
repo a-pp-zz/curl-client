@@ -125,7 +125,7 @@ class Response {
             $this->_body = json_decode ($this->_body, TRUE);
         }
         elseif (class_exists('\SimpleXMLElement') AND strpos($content_type, 'xml')) {
-            $object = simplexml_load_string ($this->_rawbody, "SimpleXMLElement", LIBXML_NOCDATA);
+            $object = simplexml_load_string ($this->_body, "SimpleXMLElement", LIBXML_NOCDATA);
             $this->_body = json_decode(json_encode($object), TRUE);
             unset ($object);
         }
