@@ -116,4 +116,10 @@ class Mime {
     {
         return $ext ? Arr::get ($this->_mimes, $ext) : $this->_mimes;
     }
+
+    public function get_ext_by_mime ($mime)
+    {
+        $mimes = array_flip ($this->_mimes);
+        return Arr::get ($mimes, $mime, FALSE);
+    }
 }

@@ -56,6 +56,54 @@ class Response {
         return $this->_log;
     }
 
+    /**
+     * Download file
+     * @param  string  $download_path download dir or file
+     * @param  string  $filename      filename
+     * @param  boolean $rename        Rename to real extension or no
+     * @return mixed
+     */
+    public function download ($download_path = '/tmp', $filename = NULL, $rename = FALSE)
+    {
+        if (file_exists ($download_path) AND is_dir ($download_path) AND is_writeable ($download_path)) {
+            $filename = empty ($filename) ? basename($this->_url) : $filename;
+            $download_path .= DIRECTORY_SEPARATOR . $filename;
+        }
+        elseif (file_exists ($download_path) AND ! is_writeable ($download_path)) {
+            return FALSE;
+        }
+        elseif ( ! is_writeable (dirname($download_path))) {
+            return FALSE;
+        }
+
+        if ($this->get_status() === 200) {
+            file_put_contents ($download_path, $this->get_body());
+
+            if ($rename) {
+                $headers = $this->get_headers();
+                $content_type = $headers->offsetGet ('content-type');
+                $mime = new CurlClient\Mime;
+
+                $ext = $mime->get_ext_by_mime ($content_type);
+
+                if ($ext) {
+                    $pi = pathinfo ($download_path);
+                    $new_filename = sprintf ('%s/%s.%s', $pi['dirname'], $pi['filename'], $ext);
+
+                    if (rename ($download_path, $new_filename)) {
+                        return $new_filename;
+                    } else {
+                        return FALSE;
+                    }
+                }
+            }
+
+            return $download_path;
+        }
+
+        return FALSE;
+    }
+
     private function _execute ($verbose = FALSE)
     {
         if ($this->_request) {

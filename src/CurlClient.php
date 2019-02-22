@@ -540,35 +540,6 @@ class CurlClient {
 	}
 
 	/**
-	 * Download file
-	 * @param  string $path
-	 * @return http-code or false on error
-	 */
-	public function download ($download_path = '/tmp', $filename = NULL)
-	{
-		if (file_exists ($path) AND is_dir ($path) AND is_writeable ($path)) {
-			$filename = empty ($filename) ? basename($this->_url) : $filename;
-			$download_path .= DIRECTORY_SEPARATOR . $filename;
-		}
-		elseif (file_exists ($download_path) AND ! is_writeable ($download_path)) {
-			return FALSE;
-		}
-		elseif ( ! is_writeable (dirname($download_path))) {
-			return FALSE;
-		}
-
-		$this->no_headers();
-		$ret = $this->send();
-
-		if ($ret === 200) {
-			file_put_contents ($download_path, $this->get_body());
-			return $ret;
-		}
-
-		return FALSE;
-	}
-
-	/**
 	 * Get request headers
 	 * @return mixed
 	 */
