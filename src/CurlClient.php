@@ -574,11 +574,12 @@ class CurlClient {
 
 	        $lines = array_slice(explode("\r\n", trim(substr($this->response->body, 0, $headers_size))), 1);
 
-	        foreach ( $lines as $line ) {
-	            if ( strpos(trim($line), ': ') !== FALSE ) {
+	        foreach ($lines as $line) {
+	            if (strpos(trim($line), ': ') !== FALSE) {
 	                list($key, $value) = explode(': ', $line);
-	                if ( $key == 'Content-Disposition' AND preg_match ('#filename\="(.*)"#iu', $value, $pr ) ) {
-	                	$headers['Content-Disposition-Filename'] = $pr[1];
+	                $key = mb_strtolower($key);
+	                if ($key == 'content-disposition' AND preg_match ('#filename\="(.*)"#iu', $value, $pr ) ) {
+	                	$headers['content-disposition-filename'] = $pr[1];
 	                }
 	                $headers[$key] = $value;
 	            }
