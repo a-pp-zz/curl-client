@@ -549,8 +549,8 @@ class CurlClient {
 	 * @return CurlClient
 	 */
 	private function _populate_body () {
-		$encoding     = Arr::path ($this->response, 'headers.Content-Encoding');
-		$content_type = Arr::path ($this->response, 'headers.Content-Type');
+		$encoding     = Arr::path ($this->response, 'headers.content-encoding');
+		$content_type = Arr::path ($this->response, 'headers.content-type');
 
 	    if (strpos($content_type, 'json'))
 	    	$this->response->body = json_decode($this->response->body, TRUE);
