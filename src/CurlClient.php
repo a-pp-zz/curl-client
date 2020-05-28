@@ -470,18 +470,23 @@ class CurlClient {
 	 * @return http-code or false on error
 	 */
 	public function download ($path = '/tmp') {
-		if ( file_exists($path) AND is_dir($path) AND is_writeable($path))
+		if (file_exists($path) AND is_dir($path) AND is_writeable($path)) {
 			$path .= DIRECTORY_SEPARATOR . basename($this->url);
-		elseif ( file_exists($path) AND !is_writeable($path))
+		}
+		elseif (file_exists($path) AND ! is_writeable($path)) {
 			return FALSE;
-		elseif ( !is_writeable(dirname($path)))
+		}
+		elseif ( ! is_writeable(dirname($path))) {
 			return FALSE;
-		$this->no_headers();
+		}
+
 		$ret = $this->send();
+
 		if ($ret === 200) {
 			file_put_contents($path, $this->get_body());
 			return $ret;
 		}
+
 		return FALSE;
 	}
 
