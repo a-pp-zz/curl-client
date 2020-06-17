@@ -38,6 +38,8 @@ class CurlClient {
 	 */
 	private $proxy = FALSE;
 
+	private $json_force_array = FALSE;
+
 	/**
 	 * popular clients
 	 */
@@ -402,6 +404,17 @@ class CurlClient {
 	}
 
 	/**
+	 * json force use array instead of objs
+	 * @param  boolean $force
+	 * @return CurlClient
+	 */
+	public function json_force_array ($force = TRUE)
+	{
+		$this->json_force_array = (bool)$force;
+		return $this;
+	}
+
+	/**
 	 * Send Curl request
 	 * @return http-code response
 	 */
@@ -561,10 +574,10 @@ class CurlClient {
 		$content_type = Arr::path ($this->response, 'headers.content-type');
 
 	    if (strpos($content_type, 'json'))
-	    	$this->response->body = json_decode($this->response->body, TRUE);
+	    	$this->response->body = json_decode($this->response->body, $this->json_force_array);
 	    elseif (strpos($content_type, 'xml')) {
 			$object = simplexml_load_string ($this->response->body, "SimpleXMLElement", LIBXML_NOCDATA);
-			$this->response->body = json_decode(json_encode($object), TRUE);
+			$this->response->body = json_decode(json_encode($object), $this->json_force_array);
 			unset ($object);
 	    }
 	    return $this;
