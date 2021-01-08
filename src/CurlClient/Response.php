@@ -11,11 +11,26 @@ class Response {
     private $_info;
     private $_headers;
     private $_log;
+    private $_multi = FALSE;
+    private $_verbose = FALSE;
+    private $_get_content_func;
 
-    public function __construct ($request, $verbose = FALSE)
+    public function __construct ($request, $multi = FALSE)
     {
         $this->_request = $request;
-        $this->_execute($verbose);
+        $this->_multi   = (bool)$multi;
+        $this->_get_content_func = $this->_multi ? 'curl_multi_getcontent' : 'curl_exec';
+    }
+
+    public static function factory ($request, $multi = FALSE)
+    {
+        return new Response ($request, $multi);
+    }
+
+    public function verbose ($verbose = FALSE)
+    {
+        $this->_verbose = $verbose;
+        return $this;
     }
 
     public function get_status ()
@@ -54,6 +69,25 @@ class Response {
     public function get_log ()
     {
         return $this->_log;
+    }
+
+    public function execute ()
+    {
+        if (is_resource($this->_request)) {
+
+            $this->_body = $this->_rawbody = call_user_func ($this->_get_content_func, $this->_request);
+
+            if ($this->_verbose !== FALSE) {
+                rewind ($this->_verbose);
+                $this->_log = stream_get_contents ($this->_verbose);
+            }
+
+            $this->_info = curl_getinfo ($this->_request);
+            $this->_parse_headers();
+            $this->_populate_body();
+        }
+
+        return $this;
     }
 
     /**
@@ -104,26 +138,6 @@ class Response {
         return FALSE;
     }
 
-    private function _execute ($verbose = FALSE)
-    {
-        if ($this->_request) {
-            $this->_body = $this->_rawbody = curl_exec ($this->_request);
-            $this->_info = curl_getinfo ($this->_request);
-            $this->_parse_headers();
-            $this->_populate_body();
-            curl_close ($this->_request);
-
-            if ($verbose) {
-                rewind ($verbose);
-                $this->_log = stream_get_contents ($verbose);
-            }
-
-            return TRUE;
-        }
-
-        return FALSE;
-    }
-
     private function _parse_headers ()
     {
         $headers_size = Arr::get ($this->_info, 'header_size', 0);
@@ -131,34 +145,10 @@ class Response {
 
         if ($headers_size > 0) {
 
-            $lines = array_slice(explode("\r\n", trim(substr($this->_rawbody, 0, $headers_size))), 1);
-            $cookies = new CurlClient\Cookies;
+            $this->_headers = Headers::parse_headers ($this->_rawbody, $headers_size);
 
-            foreach ($lines as $line) {
-                if (strpos(trim($line), ': ') !== FALSE ) {
-                    list($key, $value) = explode(': ', $line);
-                    $key = mb_strtolower ($key);
-
-                    if ($key == 'content-disposition' AND preg_match ('#filename\="(.*)"#iu', $value, $pr ) ) {
-                        $headers['content-disposition-filename'] = $pr[1];
-                    }
-
-                    if ($key == 'set-cookie') {
-                        //$headers['cookies_raw'][] = $value;
-                        $cookies->add_cookie ($value);
-                    } else {
-                        $headers[$key] = $value;
-                    }
-                }
-            }
-
-            if ($cookies->count()) {
-                $headers['cookies'] = $cookies;
-            }
-
-            if (sizeof ($headers) > 0) {
+            if ($this->_headers->count()) {
                 $this->_body = mb_substr ($this->_rawbody, $headers_size);
-                $this->_headers = new Headers ($headers);
             }
         }
 
