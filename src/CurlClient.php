@@ -41,9 +41,12 @@ class CurlClient {
 	private $_payload;
 	private $_query;
 	private $_headers;
+	private $_request;
 	private $_response;
 	private $_http_version = 2;
 	private $_verbose;
+	private $_file;
+	private $_file_handle;
 
 	const GET    = 'GET';
 	const HEAD   = 'HEAD';
@@ -173,7 +176,14 @@ class CurlClient {
 
 	public function verbose ($verbose = TRUE)
 	{
-		$this->_verbose = $verbose;
+		if ($verbose === TRUE) {
+        	$this->set_option('CURLOPT_VERBOSE', true);
+			$handle = fopen('php://temp', 'w+');
+			$this->set_option('CURLOPT_STDERR', $handle);
+		} else {
+			$this->_verbose = FALSE;
+		}
+
 		return $this;
 	}
 
@@ -463,10 +473,10 @@ class CurlClient {
 	}
 
 	/**
-	 * Send Curl request
-	 * @return http-code response
+	 * Compile curl request
+	 * @return CURL resource
 	 */
-	public function send ()
+	public function get_request ()
 	{
 		$this->_prepare ();
 		$this->_set_headers ();
@@ -487,12 +497,12 @@ class CurlClient {
 
 			case CurlClient::PUT :
 				if ($this->_file AND file_exists($this->_file)) {
-					$fp = fopen ($this->_file, 'rb');
+					$this->_file_handle = fopen ($this->_file, 'rb');
 					$filesize = filesize ($this->_file);
 					$this->_url .= DIRECTORY_SEPARATOR . basename ($this->_file);
 					$this->set_option ('CURLOPT_PUT', TRUE);
 					$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
-					$this->set_option ('CURLOPT_INFILE', $fp);
+					$this->set_option ('CURLOPT_INFILE', $this->_file_handle);
 					$this->set_option ('CURLOPT_INFILESIZE', $filesize);
 					$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
 				}
@@ -516,26 +526,21 @@ class CurlClient {
 		}
 
         $request = curl_init ($this->_url);
-        $verbose = NULL;
-
-		if ($this->_verbose) {
-        	$this->set_option('CURLOPT_VERBOSE', true);
-			$verbose = fopen('php://temp', 'w+');
-			$this->set_option('CURLOPT_STDERR', $verbose);
-		}
-
         curl_setopt_array($request, $this->_options);
+		return $request;
+	}
 
-		$this->_response = new CurlClient\Response ($request, $verbose);
-
-		if (isset($fp)) {
-			fclose($fp);
-		}
-
-		if ($verbose) {
-			fclose ($verbose);
-		}
-
+	/**
+	 * Send Curl request
+	 * @return Response object
+	 */
+	public function send ()
+	{
+		$this->_request = $this->get_request();
+		$this->_response = CurlClient\Response::factory ($this->_request, FALSE)
+											->verbose ($this->_verbose)
+											->execute();
+		$this->_close_handlers();
 		return $this->_response;
 	}
 
@@ -563,6 +568,21 @@ class CurlClient {
 
 			$this->set_option ('CURLOPT_HTTPHEADER', (array) $headers);
 		}
+
+		return $this;
+	}
+
+	private function _close_handlers ()
+	{
+		if ($this->_verbose AND is_resource($this->_verbose)) {
+			fclose ($this->_verbose);
+		}
+
+		if ($this->_file_handle AND is_resource($this->_file_handle)) {
+			fclose ($this->_file_handle);
+		}
+
+		curl_close ($this->_request);
 
 		return $this;
 	}
