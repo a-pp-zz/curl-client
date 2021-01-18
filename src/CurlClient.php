@@ -45,7 +45,7 @@ class CurlClient {
 	private $_response;
 	private $_http_version = 2;
 	private $_verbose;
-	private $_file;
+	private $_files = [];
 	private $_file_handle;
 
 	const GET    = 'GET';
@@ -168,18 +168,24 @@ class CurlClient {
 		return $this;
 	}
 
-	public function file ($file = NULL)
-	{
-		$this->_file = $file;
-		return $this;
-	}
+    /**
+     * Attach file in the request
+     * @param string $filename
+     * @param string $fieldname
+     * @return CurlClient
+     */
+    public function file ($filename = '', $fieldname = 'file')
+    {
+        $this->_files[$fieldname] = $filename;
+        return $this;
+    }
 
 	public function verbose ($verbose = TRUE)
 	{
 		if ($verbose === TRUE) {
         	$this->set_option('CURLOPT_VERBOSE', true);
-			$handle = fopen('php://temp', 'w+');
-			$this->set_option('CURLOPT_STDERR', $handle);
+			$this->_verbose = fopen('php://temp', 'w+');
+			$this->set_option('CURLOPT_STDERR', $this->_verbose);
 		} else {
 			$this->_verbose = FALSE;
 		}
@@ -455,6 +461,18 @@ class CurlClient {
 		return $this;
 	}
 
+    public function upload ()
+    {
+        $this->content_type ('multipart');
+        return $this;
+    }
+
+    public function multipart ()
+    {
+        $this->upload ();
+        return $this;
+    }
+
 	/**
 	 * Set payload params
 	 * @param  array  $params
@@ -496,23 +514,21 @@ class CurlClient {
 			break;
 
 			case CurlClient::PUT :
-				if ($this->_file AND file_exists($this->_file)) {
-					$this->_file_handle = fopen ($this->_file, 'rb');
-					$filesize = filesize ($this->_file);
-					$this->_url .= DIRECTORY_SEPARATOR . basename ($this->_file);
-					$this->set_option ('CURLOPT_PUT', TRUE);
-					$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
-					$this->set_option ('CURLOPT_INFILE', $this->_file_handle);
-					$this->set_option ('CURLOPT_INFILESIZE', $filesize);
-					$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
-				}
+                if ( ! empty ($this->_files)) :
+                	$file = array_shift ($this->_files);
+                	if (file_exists($file)) :
+	                    $this->_file_handle = fopen ($file, 'rb');
+	                    $this->set_option ('CURLOPT_PUT', TRUE);
+	                    $this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
+	                    $this->set_option ('CURLOPT_INFILE', $this->_file_handle);
+	                    $this->set_option ('CURLOPT_INFILESIZE', filesize ($file));
+	                    $this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
+	                    $this->_url = rtrim ($this->_url, '/') . DIRECTORY_SEPARATOR . basename ($file);
+                	endif;
+                endif;
 			break;
 
 			default:
-				if ( ! empty ($this->_file)) :
-					$this->_url .= DIRECTORY_SEPARATOR . basename($this->_file);
-				endif;
-
 				if ($this->_method === CurlClient::POST):
 					$this->set_option ('CURLOPT_POST', TRUE);
 				else :
@@ -596,32 +612,30 @@ class CurlClient {
 		if ( ! empty ($this->_payload) AND $this->_content_type == 'form') {
 			$this->_payload = http_build_query ($this->_payload);
 		}
-		elseif ($this->_content_type == 'multipart') {
-			$mimes = new CurlClient\Mimes;
+        elseif ($this->_content_type == 'multipart') {
+            $mimes = new CurlClient\Mime;
 
-			foreach ($this->params as $key=>&$value) {
-				if (preg_match('#\.\w{2,5}$#iu', $value)) {
-					if (class_exists('\CURLFile')) {
-						$ext = pathinfo ($value, PATHINFO_EXTENSION);
-						$name = pathinfo ($value, PATHINFO_BASENAME);
-						$mime = $mimes->get ($ext);
+            foreach ($this->_files as $filefield=>$filename) {
+                if (class_exists('\CURLFile')) {
+                    $ext = pathinfo ($filename, PATHINFO_EXTENSION);
+                    $name = pathinfo ($filename, PATHINFO_BASENAME);
+                    $mime = $mimes->get ($ext);
 
-						if ( ! empty ($mime)) {
-							$value = new \CURLFile($value, $mime, $name);
-						}
-					} else {
-						$value = '@' . $value;
-					}
-				}
-			}
-		}
+                    if ( ! empty ($mime)) {
+                        $this->_payload[$filefield] = new \CURLFile($filename, $mime, $name);
+                    }
+                } else {
+                    $this->_payload[$filefield] = '@' . $filename;
+                }
+            }
+        }
 		else {
 			if ($this->_content_type == 'json') {
 				if (is_array($this->_payload) OR is_object($this->_payload)) {
 					$this->_payload = json_encode ($this->_payload);
 				}
 			}
-			if (empty($this->_file) AND is_scalar($this->_payload)) {
+			if (empty($this->_files) AND is_scalar($this->_payload)) {
 				$this->header ('Content-Length', mb_strlen ($this->_payload));
 			}
 		}
