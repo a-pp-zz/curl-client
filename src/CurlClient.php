@@ -513,27 +513,27 @@ class CurlClient {
 				endif;
 			break;
 
-			case CurlClient::PUT :
-                if ( ! empty ($this->_files)) :
-                	$file = array_shift ($this->_files);
-                	if (file_exists($file)) :
-	                    $this->_file_handle = fopen ($file, 'rb');
-	                    $this->set_option ('CURLOPT_PUT', TRUE);
-	                    $this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
-	                    $this->set_option ('CURLOPT_INFILE', $this->_file_handle);
-	                    $this->set_option ('CURLOPT_INFILESIZE', filesize ($file));
-	                    $this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
-	                    $this->_url = rtrim ($this->_url, '/') . DIRECTORY_SEPARATOR . basename ($file);
-                	endif;
-                endif;
-			break;
-
 			default:
 				if ($this->_method === CurlClient::POST):
 					$this->set_option ('CURLOPT_POST', TRUE);
 				else :
 					$this->set_option ('CURLOPT_CUSTOMREQUEST', $this->_method);
 				endif;
+
+				if ($this->_method === CurlClient::PUT) :
+					if ( ! empty ($this->_files)) :
+						$file = array_shift ($this->_files);
+						if (file_exists($file)) :
+							$this->_file_handle = fopen ($file, 'rb');
+							$this->set_option ('CURLOPT_PUT', TRUE);
+							$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
+							$this->set_option ('CURLOPT_INFILE', $this->_file_handle);
+							$this->set_option ('CURLOPT_INFILESIZE', filesize ($file));
+							$this->set_option ('CURLOPT_BINARYTRANSFER', TRUE);
+							$this->_url = rtrim ($this->_url, '/') . DIRECTORY_SEPARATOR . basename ($file);
+						endif;
+					endif;
+				endif;				
 
 				if ( ! empty ($this->_payload)) :
 					$this->set_option ('CURLOPT_POSTFIELDS', $this->_payload);
