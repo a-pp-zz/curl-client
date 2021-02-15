@@ -2,7 +2,7 @@
 /**
  * Simple MultiCurl Client
  * @package Http
- * @version	3.0.0
+ * @version	3.0.1
  */
 namespace AppZz\Http;
 use \AppZz\Helpers\Arr;
@@ -12,6 +12,7 @@ class MultiCurlClient {
 
 	private $_mc;
 	private $_results;
+	private $_queue;
 
 	public function __construct ()
 	{
@@ -25,6 +26,9 @@ class MultiCurlClient {
 
 	public function add ($request, $params = [])
 	{
+		$this->_queue = (array)$this->_queue;
+		$queue_pos = count($this->_queue) - 1;
+
 		if (is_array ($request) AND ! empty ($request)) {
 			foreach ($request as $r) {
 				$this->add ($r, $params);
@@ -39,6 +43,7 @@ class MultiCurlClient {
 		}
 
 		curl_multi_add_handle ($this->_mc, $request);
+		$this->_queue[(string)$request] = ++$queue_pos;
 		return $this;
 	}
 
@@ -62,6 +67,7 @@ class MultiCurlClient {
 			curl_multi_close ($this->_mc);
 		}
 
+		ksort ($this->_results);
 		return $this->_results;
 	}
 
@@ -71,9 +77,12 @@ class MultiCurlClient {
 
 		if (is_resource($handle)) {
 
-			$this->_results[] = CurlClient\Response::factory ($handle, TRUE)
+			$qid = Arr::get ($this->_queue, (string)$handle, -1);
+			$result = CurlClient\Response::factory ($handle, TRUE)
 											->verbose (FALSE)
 											->execute();
+
+			$qid >= 0 ? $this->_results[$qid] = $result : $this->_results[] = $result;
 
 			curl_multi_remove_handle ($this->_mc, $handle);
 			curl_close ($handle);
